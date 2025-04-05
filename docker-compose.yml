@@ -1,0 +1,82 @@
+version: "3.8"
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+ 
+  configsvr:
+    image: mongo:6.0
+    command: ["mongod", "--configsvr", "--replSet", "configReplSet", "--port", "27019"]
+    ports:
+      - 27019:27019
+    networks:
+      - mongo-shard-net
+
+  shard1:
+    image: mongo:6.0
+    command: ["mongod", "--shardsvr", "--replSet", "shardReplSet1", "--port", "27018"]
+    ports:
+      - 27018:27018
+    networks:
+      - mongo-shard-net
+      
+  shard2:
+    image: mongo:6.0
+    command: ["mongod", "--shardsvr", "--replSet", "shardReplSet2", "--port", "27028"]
+    ports:
+      - 27028:27028
+    networks:
+      - mongo-shard-net
+
+  shard3:
+    image: mongo:6.0
+    command: ["mongod", "--shardsvr", "--replSet", "shardReplSet3", "--port", "27038"]
+    ports:
+      - 27038:27038
+    networks:
+      - mongo-shard-net    
+
+  mongos:
+    image: mongo:6.0
+    depends_on:
+      - configsvr
+      - shard1
+    command: >
+      bash -c "sleep 5 &&
+      mongos --configdb configReplSet/configsvr:27019 --bind_ip_all"
+    ports:
+      - 27017:27017
+    networks:
+      - mongo-shard-net
+
+  mongo-express:
+    image: mongo-express
+    depends_on:
+      - mongos
+    ports:
+      - 8081:8081
+    environment:
+      ME_CONFIG_MONGODB_SERVER: mongos
+      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: pass
+    networks:
+      - mongo-shard-net
+
+networks:
+  mongo-shard-net:
+ 
